@@ -1,6 +1,6 @@
 ### Why this project?
 While ThreadPools support dynamic sizes of their thread pools, 
-ScheduledExecutors don't do it. I don't why but I guess optimizing a thread pool 
+ScheduledExecutors don't do it. I don't know why but I guess optimizing a thread pool 
 for scheduled tasks is impossible because you will always find a schedule of tasks which
 suffers from a poor performance by a bad default configuration.  
 E.g. you schedule 10 tasks which take 5s execution time every 30s simultaneously. If the default configuration of
