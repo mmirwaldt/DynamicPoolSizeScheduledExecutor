@@ -43,7 +43,7 @@ I don't neither look for a perfect default configuration for my solution because
 If your project is open source AND non-commercial, then the answer is "yes, of course". 
 I appreciate an email in which you tell me shortly about your project and how you use my solution.
 Maybe you can add somewhere a short remark in your project about me and this solution here. That will make me very happy.
-If your project is closed source and/or commercial, I will not allow you to use this code for two reasons:
+**If your project is closed source and/or commercial, I will not allow you to use this code for two reasons:**
 1. I am not sure whether this code is good and safe enough to be used in a productive system.
    I cannot and will not guarantee that my solution always works the way programmers expect it.
 2. I don't want to run in any liability issues or a law case!
