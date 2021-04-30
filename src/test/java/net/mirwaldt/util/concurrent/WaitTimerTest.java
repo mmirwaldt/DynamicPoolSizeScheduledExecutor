@@ -66,7 +66,7 @@ public class WaitTimerTest {
 
         @ParameterizedTest
         @MethodSource("arguments")
-        void givenTimeoutIsNegative_whenStartAndNextRemainingTimeouts_thenExpectAlwaysTimeoutIsZero(
+        void givenTimeoutIsNegative_whenStartAndNextRemainingTimeouts_thenExpectAlwaysZero(
                 TimeUnit unit, LongSupplier millisSupplier, LongSupplier nanosSupplier) {
             final WaitTimer waitTimer = new WaitTimer(-1, unit, millisSupplier, nanosSupplier);
             assertEquals(0, waitTimer.start());
@@ -76,7 +76,7 @@ public class WaitTimerTest {
 
         @ParameterizedTest
         @MethodSource("arguments")
-        void givenTimeoutIsZero_whenStartAndNextRemainingTimeouts_thenExpectAlwaysTimeoutIsZero(
+        void givenTimeoutIsZero_whenStartAndNextRemainingTimeouts_thenExpectAlwaysZero(
                 TimeUnit unit, LongSupplier millisSupplier, LongSupplier nanosSupplier) {
             final WaitTimer waitTimer = new WaitTimer(0, unit, millisSupplier, nanosSupplier);
             assertEquals(0, waitTimer.start());
@@ -100,7 +100,7 @@ public class WaitTimerTest {
 
         @ParameterizedTest
         @MethodSource("arguments")
-        void givenTimeoutIsPositive_whenOneStartAndTwoTimesNextRemainingTimeouts_thenExpectTwoValuesAndThenThenZero(
+        void givenTimeoutIsPositive_whenOneStartAndTwoTimesNextRemainingTimeouts_thenExpectTwoValuesAndThenZero(
                 TimeUnit unit, LongSupplier millisSupplier, LongSupplier nanosSupplier) {
             final long timeoutInNanos = 20_000_000_000L;
             final long timeout = unit.convert(timeoutInNanos, NANOSECONDS);
