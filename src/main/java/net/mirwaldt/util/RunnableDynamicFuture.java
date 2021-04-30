@@ -2,7 +2,7 @@ package net.mirwaldt.util;
 
 import java.util.concurrent.ExecutorService;
 
-public class RunnableDynamicFuture<T> extends AbstractDynamicFuture<T> implements Runnable {
+final class RunnableDynamicFuture<T> extends AbstractDynamicFuture<T> implements Runnable {
     private final Runnable runnable;
 
     public RunnableDynamicFuture(ExecutorService executorService, Runnable runnable) {

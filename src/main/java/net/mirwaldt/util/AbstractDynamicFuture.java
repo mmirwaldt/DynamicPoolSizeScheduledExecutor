@@ -1,12 +1,9 @@
 package net.mirwaldt.util;
 
-import net.mirwaldt.util.job.JobWithResult;
-import net.mirwaldt.util.job.JobWithoutResult;
-
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
+abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
     protected final ExecutorService executorService;
 
     protected final CountDownLatch scheduledFutureLatch = new CountDownLatch(1);
@@ -18,10 +15,8 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
     protected ScheduledFuture<?> scheduledFuture;
     // guarded by reentrantLock
     protected Future<?> future;
-    // guarded by reentrantLock
-    protected InterruptedException interruptedException;
 
-    public AbstractDynamicFuture(ExecutorService executorService) {
+    protected AbstractDynamicFuture(ExecutorService executorService) {
         this.executorService = executorService;
     }
 
@@ -37,6 +32,7 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
+        waitForScheduledFuture();
         return runLockedWithResult(() -> {
             if (future == null) {
                 return scheduledFuture.cancel(mayInterruptIfRunning);
@@ -49,6 +45,7 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
 
     @Override
     public boolean isCancelled() {
+        waitForScheduledFuture();
         return runLockedWithResult(() -> {
             if (future == null) {
                 return scheduledFuture.isCancelled();
@@ -60,6 +57,7 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
 
     @Override
     public boolean isDone() {
+        waitForScheduledFuture();
         return runLockedWithResult(() -> {
             if (future == null) {
                 return scheduledFuture.isDone();
@@ -71,7 +69,6 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
 
     @Override
     public T get() throws InterruptedException, ExecutionException {
-        throwInterruptedExceptionIfItHasBeenThrown();
         scheduledFutureLatch.await();
         scheduledFuture.get();
         futureLatch.await();
@@ -80,8 +77,6 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
 
     @Override
     public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        throwInterruptedExceptionIfItHasBeenThrown();
-
         final WaitTimer waitTimer = new WaitTimer(timeout, unit);
         final TimeUnit selectedUnit = waitTimer.getSelectedUnit();
         long remainingTimeout = waitTimer.start();
@@ -106,17 +101,7 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
         });
     }
 
-    protected void waitForScheduledFuture() {
-        try {
-            scheduledFutureLatch.await();
-        } catch (InterruptedException e) {
-            runLockedWithoutResult(() -> {
-                interruptedException = e;
-            });
-        }
-    }
-
-    public void runLockedWithoutResult(JobWithoutResult job) {
+    protected void runLockedWithoutResult(Runnable job) {
         reentrantLock.lock();
         try {
             job.run();
@@ -125,23 +110,22 @@ public abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
         }
     }
 
-    public <ResultType> ResultType runLockedWithResult(JobWithResult<ResultType> jobWithResult) {
+    protected <ResultType> ResultType runLockedWithResult(Callable<ResultType> jobWithResult) {
         reentrantLock.lock();
         try {
-            return jobWithResult.run();
+            return jobWithResult.call();
+        } catch (Exception e) {
+            throw new AssertionError("The callable parameter is not supposed to throw an exception!", e);
         } finally {
             reentrantLock.unlock();
         }
     }
 
-    public void throwInterruptedExceptionIfItHasBeenThrown() throws InterruptedException {
-        reentrantLock.lock();
+    protected void waitForScheduledFuture() {
         try {
-            if (interruptedException != null) {
-                throw interruptedException;
-            }
-        } finally {
-            reentrantLock.unlock();
+            scheduledFutureLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while waiting for the setting of the scheduledFuture.", e);
         }
     }
 

@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.*;
 
-public class WaitTimer {
+final class WaitTimer {
     private final TimeUnit selectedUnit;
     private long remainingTimeout;
     private long startTime;
