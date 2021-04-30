@@ -1,17 +1,28 @@
 package net.mirwaldt.util.concurrent;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
+import static java.lang.Math.max;
+import static java.lang.Math.subtractExact;
 import static java.util.concurrent.TimeUnit.*;
 
 final class WaitTimer {
     private final TimeUnit selectedUnit;
+    private final LongSupplier millisSupplier;
+    private final LongSupplier nanosSupplier;
     private long remainingTimeout;
     private long startTime;
 
-    public WaitTimer(long timeout, TimeUnit timeUnit) {
+    WaitTimer(long timeout, TimeUnit timeUnit) {
+        this(timeout, timeUnit, System::currentTimeMillis, System::nanoTime);
+    }
+
+    WaitTimer(long timeout, TimeUnit timeUnit, LongSupplier millisSupplier, LongSupplier nanosSupplier) {
         this.selectedUnit = selectTimeUnit(timeUnit);
-        this.remainingTimeout = selectedUnit.convert(timeout, selectedUnit);
+        this.remainingTimeout = max(0, selectedUnit.convert(timeout, timeUnit));
+        this.millisSupplier = millisSupplier;
+        this.nanosSupplier = nanosSupplier;
     }
 
     public TimeUnit getSelectedUnit() {
@@ -24,10 +35,12 @@ final class WaitTimer {
     }
 
     public long nextRemainingTimeout() {
-        final long endTime = getTime(selectedUnit);
-        final long elapsedTime = Math.subtractExact(startTime, endTime);
-        remainingTimeout = Math.subtractExact(remainingTimeout, elapsedTime);
-        startTime = endTime;
+        if(0 < remainingTimeout) {
+            final long endTime = getTime(selectedUnit);
+            final long elapsedTime = subtractExact(endTime, startTime);
+            remainingTimeout = max(0, subtractExact(remainingTimeout, elapsedTime));
+            startTime = endTime;
+        }
         return remainingTimeout;
     }
 
@@ -41,9 +54,9 @@ final class WaitTimer {
 
     private long getTime(TimeUnit selectedUnit) {
         if(NANOSECONDS.equals(selectedUnit)) {
-            return System.nanoTime();
+            return nanosSupplier.getAsLong();
         } else {
-            return System.currentTimeMillis();
+            return millisSupplier.getAsLong();
         }
     }
 }
