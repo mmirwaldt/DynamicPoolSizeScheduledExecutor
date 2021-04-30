@@ -1,4 +1,4 @@
-package net.mirwaldt.util;
+package net.mirwaldt.util.concurrent;
 
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
