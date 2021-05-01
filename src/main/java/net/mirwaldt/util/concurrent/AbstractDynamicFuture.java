@@ -62,7 +62,7 @@ abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
             if (future == null) {
                 return scheduledFuture.isDone();
             } else {
-                return future.isDone();
+                return scheduledFuture.isDone() && future.isDone();
             }
         });
     }
