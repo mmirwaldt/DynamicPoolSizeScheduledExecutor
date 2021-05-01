@@ -81,13 +81,13 @@ abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
         final TimeUnit selectedUnit = waitTimer.getSelectedUnit();
         long remainingTimeout = waitTimer.start();
 
-        if (scheduledFutureLatch.await(remainingTimeout, selectedUnit)) {
+        if (!scheduledFutureLatch.await(remainingTimeout, selectedUnit)) {
             throw createTimeoutException(timeout, unit);
         }
 
         scheduledFuture.get(waitTimer.nextRemainingTimeout(), selectedUnit);
 
-        if (futureLatch.await(waitTimer.nextRemainingTimeout(), selectedUnit)) {
+        if (!futureLatch.await(waitTimer.nextRemainingTimeout(), selectedUnit)) {
             throw createTimeoutException(timeout, unit);
         }
 
