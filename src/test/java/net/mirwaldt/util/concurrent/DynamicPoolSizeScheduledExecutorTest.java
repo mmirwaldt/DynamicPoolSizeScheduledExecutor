@@ -1,6 +1,7 @@
 package net.mirwaldt.util.concurrent;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -10,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DynamicPoolSizeScheduledExecutorTest {
@@ -19,23 +21,46 @@ public class DynamicPoolSizeScheduledExecutorTest {
     @SuppressWarnings("unused")
     private static Stream<Arguments> argumentsForOneExecution() {
         return Stream.of(
-                Arguments.of(new RecordingRunnable(1)),
-                Arguments.of(new RecordingCallable<>(1))
+                Arguments.of(new RecordingRunnable(1), true),
+                Arguments.of(new RecordingCallable<>(1), true),
+                Arguments.of(new RecordingRunnable(1), false),
+                Arguments.of(new RecordingCallable<>(1), false)
         );
     }
 
+    @Timeout(5)
     @ParameterizedTest
     @MethodSource("argumentsForOneExecution")
-    void givenRunnableOrCallable_whenScheduledWithDelay_thenExecutedAfterDelay(Recording recording)
+    void givenRunnableOrCallable_whenScheduledWithDelay_thenExecutedAfterDelay(
+            Recording recording, boolean useTimeoutOfGetMethod)
             throws InterruptedException, ExecutionException, TimeoutException {
         final DynamicPoolSizeScheduledExecutor executor = createSingleThreadedDynamicPoolSizeScheduledExecutor();
         final long scheduleTimeInMillis = System.currentTimeMillis();
 
-        actScheduleWithDelay(recording, executor);
+        final ScheduledFuture<?> scheduledFuture = actScheduleWithDelay(recording, executor);
 
+        assertStatesAndWaitForHavingBeenExecutedOnceWithDelay(useTimeoutOfGetMethod, scheduledFuture);
         assertExecutedAfterDelayInTime(recording, scheduleTimeInMillis);
 
         executor.shutdown();
+    }
+
+    private void assertStatesAndWaitForHavingBeenExecutedOnceWithDelay(
+            boolean useTimeoutOfGetMethod, ScheduledFuture<?> scheduledFuture)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        assertFalse(scheduledFuture.isDone(),
+                "Runnable/Callable cannot be 'done' before it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
+        if(useTimeoutOfGetMethod) {
+            scheduledFuture.get(2, SECONDS);
+        } else {
+            scheduledFuture.get();
+        }
+        assertTrue(scheduledFuture.isDone(),
+                "Runnable/Callable must be 'done' after it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
     }
 
     private DynamicPoolSizeScheduledExecutor createSingleThreadedDynamicPoolSizeScheduledExecutor() {
@@ -44,15 +69,12 @@ public class DynamicPoolSizeScheduledExecutorTest {
                 Executors.newSingleThreadExecutor());
     }
 
-    private void actScheduleWithDelay(Recording recording, DynamicPoolSizeScheduledExecutor executor)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        final ScheduledFuture<?> scheduledFuture;
+    private ScheduledFuture<?> actScheduleWithDelay(Recording recording, DynamicPoolSizeScheduledExecutor executor) {
         if(recording instanceof Runnable) {
-            scheduledFuture = executor.schedule((Runnable) recording, 1000, TimeUnit.MILLISECONDS);
+            return executor.schedule((Runnable) recording, 1000, TimeUnit.MILLISECONDS);
         } else {
-            scheduledFuture = executor.schedule((Callable<?>) recording, 1000, TimeUnit.MILLISECONDS);
+            return executor.schedule((Callable<?>) recording, 1000, TimeUnit.MILLISECONDS);
         }
-        scheduledFuture.get(2, SECONDS);
     }
 
     private void assertExecutedAfterDelayInTime(Recording recording, long scheduleTimeInMillis) {
@@ -68,29 +90,43 @@ public class DynamicPoolSizeScheduledExecutorTest {
     void givenRunnable_whenScheduledAtFixedRateAndWithDelay_thenExecutedThreeTimesAfterDelay()
             throws InterruptedException {
         final DynamicPoolSizeScheduledExecutor executor = createSingleThreadedDynamicPoolSizeScheduledExecutor();
-        final int numberOfExecutions = 3;
         final long scheduleTimeInMillis = System.currentTimeMillis();
-        final RecordingRunnable recordingRunnable = new RecordingRunnable(numberOfExecutions);
+        final RecordingRunnable recordingRunnable = new RecordingRunnable(3);
 
-        actScheduleAtFixedRateAndWithDelay(executor, recordingRunnable);
+        final ScheduledFuture<?> scheduledFuture = executor.scheduleAtFixedRate(
+                recordingRunnable, 2, 1, SECONDS);
 
+        assertStatesAndWaitForHavingBeenExecutedThreeTimesAtFixedRate(scheduledFuture, recordingRunnable);
         assertExecutedThreeTimesAtFixedRate(scheduleTimeInMillis, recordingRunnable);
 
         executor.shutdown();
     }
 
-    private void actScheduleAtFixedRateAndWithDelay(
-            DynamicPoolSizeScheduledExecutor executor, RecordingRunnable recordingRunnable)
+    private void assertStatesAndWaitForHavingBeenExecutedThreeTimesAtFixedRate(
+            ScheduledFuture<?> scheduledFuture, RecordingRunnable recordingRunnable)
             throws InterruptedException {
-        final ScheduledFuture<?> scheduledFuture = executor.scheduleAtFixedRate(
-                recordingRunnable, 2, 1, SECONDS);
+        assertFalse(scheduledFuture.isDone(),
+                "Runnable/Callable cannot be 'done' before it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
 
         final long maxWaitTimeInSecondsForLatch = 2 + 3 + 1 /* second for tolerance */;
         assertTrue(recordingRunnable.getCountDownLatch().await(maxWaitTimeInSecondsForLatch, SECONDS),
                 "Runnable has not been executed " + 3 + " times every second yet after "
                         + maxWaitTimeInSecondsForLatch + "s.");
+
+        assertFalse(scheduledFuture.isDone(),
+                "Runnable/Callable cannot be 'done' before it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
+
         assertTrue(scheduledFuture.cancel(false),
                 "Runnable could not be prevented from executing again");
+
+        assertTrue(scheduledFuture.isDone(),
+                "Runnable/Callable must be 'done' after it has been cancelled.");
+        assertTrue(scheduledFuture.isCancelled(),
+                "Runnable/Callable must be 'cancelled' if it has been cancelled.");
     }
 
     private void assertExecutedThreeTimesAtFixedRate(long scheduleTimeInMillis, RecordingRunnable recordingRunnable) {
@@ -112,40 +148,59 @@ public class DynamicPoolSizeScheduledExecutorTest {
     void givenRunnable_whenScheduledAtFixedDelayAndWithDelay_thenExecutedThreeTimesAfterDelay()
             throws InterruptedException {
         final DynamicPoolSizeScheduledExecutor executor = createSingleThreadedDynamicPoolSizeScheduledExecutor();
-        final int rateTimeInSeconds = 1;
-        final int numberOfExecutions = 3;
-        final int initialDelayInSeconds = 2;
-        final long sleepTimeInMillis = 500;
         final long scheduleTimeInMillis = System.currentTimeMillis();
 
         final RecordingRunnable recordingRunnable =
-                new RecordingRunnable(numberOfExecutions, () -> sleepUninterruptedly(sleepTimeInMillis));
+                new RecordingRunnable(3, () -> sleepUninterruptedly(500));
         final ScheduledFuture<?> scheduledFuture = executor.scheduleWithFixedDelay(
-                recordingRunnable, initialDelayInSeconds, rateTimeInSeconds, SECONDS);
+                recordingRunnable, 2, 1, SECONDS);
 
-        final long maxWaitTimeInSecondsForLatch =
-                initialDelayInSeconds + numberOfExecutions * rateTimeInSeconds +
-                        numberOfExecutions * sleepTimeInMillis + 2 /* seconds for tolerance */;
+        assertStatesAndWaitForHavingBeenExecutedThreeTimesAtFixedDelay(recordingRunnable, scheduledFuture);
+        assertExecutedThreeTimesAtFixedDelay(scheduleTimeInMillis, recordingRunnable);
+
+        executor.shutdown();
+    }
+
+    private void assertStatesAndWaitForHavingBeenExecutedThreeTimesAtFixedDelay(
+            RecordingRunnable recordingRunnable, ScheduledFuture<?> scheduledFuture) throws InterruptedException {
+        assertFalse(scheduledFuture.isDone(),
+                "Runnable/Callable cannot be 'done' before it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
+
+        final long maxWaitTimeInSecondsForLatch = 2 + 3 + 3 * (long) 500 + 2 /* seconds for tolerance */;
+
         assertTrue(recordingRunnable.getCountDownLatch().await(maxWaitTimeInSecondsForLatch, SECONDS),
-                "Runnable has not been executed " + numberOfExecutions + " times every second yet after "
+                "Runnable has not been executed " + 3 + " times every second yet after "
                         + maxWaitTimeInSecondsForLatch + "s.");
+
+        assertFalse(scheduledFuture.isDone(),
+                "Runnable/Callable cannot be 'done' before it has been executed.");
+        assertFalse(scheduledFuture.isCancelled(),
+                "Runnable/Callable cannot be can 'cancelled' if it has never been cancelled.");
+
         assertTrue(scheduledFuture.cancel(false),
                 "Runnable could not be prevented from executing again");
 
+        assertTrue(scheduledFuture.isDone(),
+                "Runnable/Callable must be 'done' after it has been cancelled.");
+        assertTrue(scheduledFuture.isCancelled(),
+                "Runnable/Callable must be 'cancelled' if it has been cancelled.");
+    }
+
+    private void assertExecutedThreeTimesAtFixedDelay(long scheduleTimeInMillis, RecordingRunnable recordingRunnable) {
         final AtomicLongArray scheduleTimesInMillisReference = recordingRunnable.getScheduleTimesInMillisReference();
-        final long scheduleTimeInMillisWithInitialDelay = scheduleTimeInMillis + initialDelayInSeconds * 1000L;
-        for (int i = 0; i < numberOfExecutions; i++) {
+        final long scheduleTimeInMillisWithInitialDelay = scheduleTimeInMillis + 2 * 1000L;
+        for (int i = 0; i < 3; i++) {
             final long startTimeInMillis = scheduleTimesInMillisReference.get(i);
             assertTrue(0 < startTimeInMillis, "Runnable has not been executed " + (i + 1) + " times.");
             final long actualElapsedTimeInMillis = startTimeInMillis - scheduleTimeInMillisWithInitialDelay;
             final long expectedElapsedTimeInMillis =
-                    i * rateTimeInSeconds * 1000L + i * sleepTimeInMillis + (i + 1) * TOLERANCE_FOR_WAIT_TIME_IN_MILLIS;
+                    i * 1000L + i * (long) 500 + (i + 1) * TOLERANCE_FOR_WAIT_TIME_IN_MILLIS;
             assertTrue(actualElapsedTimeInMillis <= expectedElapsedTimeInMillis,
-                    "Runnable had to wait longer than "
-                            + expectedElapsedTimeInMillis + "ms (actual wait time: " + actualElapsedTimeInMillis + "ms)");
+                    "Runnable had to wait longer than " + expectedElapsedTimeInMillis
+                            + "ms (actual wait time: " + actualElapsedTimeInMillis + "ms)");
         }
-
-        executor.shutdown();
     }
 
     public void sleepUninterruptedly(long millis) {
