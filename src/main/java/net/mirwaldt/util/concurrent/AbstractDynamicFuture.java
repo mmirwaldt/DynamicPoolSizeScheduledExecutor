@@ -125,7 +125,7 @@ abstract class AbstractDynamicFuture<T> implements ScheduledFuture<T> {
         try {
             scheduledFutureLatch.await();
         } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while waiting for the setting of the scheduledFuture.", e);
+            throw new AssertionError("Interrupted while waiting for the setting of the scheduledFuture.", e);
         }
     }
 
